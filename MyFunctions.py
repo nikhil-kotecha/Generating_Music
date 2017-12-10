@@ -74,11 +74,11 @@ def Input_Kernel(input_data, Midi_low=24, Midi_high=102):
 
 
 
-def LSTM_TimeWise_Training_Layer(input_data, num_units=50):
+def LSTM_TimeWise_Training_Layer(input_data, state_in):
     """
     Arguments:
         input_data: Tensor with size = [batch_size x num_notes x num_timesteps x input_size]
-        num_units: integer
+        initial_state: Tuple of 2 Tensors each with size =  [batch_size x num_notes x num_units]
         
     # LSTM time-wise 
     # This section is the 'Model LSTM-TimeAxis' block and will run a number of LSTM cells over the time axis.
@@ -98,25 +98,32 @@ def LSTM_TimeWise_Training_Layer(input_data, num_units=50):
     num_timesteps = tf.shape(input_data)[2]
     input_size = input_data.get_shape()[3].value
     
+    c_in, h_in = state_in
+    num_units = c_in.get_shape()[2].value
     
-    #Flatten input to allow note steps to be run in parallel as separate batches for this segment
+    
+    #Flatten input_data and state_in to allow note steps to be run in parallel as separate batches for this segment
     input_flatten = tf.reshape(input_data, shape=[batch_size*num_notes, num_timesteps, input_size])
+    c_in_flatten = tf.reshape(c_in, shape=[batch_size*num_notes, num_units])
+    h_in_flatten = tf.reshape(h_in, shape=[batch_size*num_notes, num_units])    
+    state_in_flatten = LSTMStateTuple(c_in_flatten, h_in_flatten)
     
-
     #Instantiate Time-Wise Cell
     lstmcell_time = BasicLSTMCell(num_units=num_units, forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
 
 
     #Run through LSTM time steps and generate time-wise sequence of outputs
-    out_flat, _ = tf.nn.dynamic_rnn(lstmcell_time, input_flatten, dtype=tf.float32)
+    out_flat, (c_flat, h_flat) = tf.nn.dynamic_rnn(lstmcell_time, input_flatten, initial_state=state_in_flatten, dtype=tf.float32)
 
 
     #Unflatten the 1st 2 dimensions [Lbatch, Nnotes, num_timesteps, num_units]
     output = tf.reshape(out_flat, shape=[batch_size, num_notes, num_timesteps, num_units])
-
-        
+    h = tf.reshape(h_flat, shape=[batch_size, num_notes, num_units])    
+    c = tf.reshape(c_flat, shape=[batch_size, num_notes, num_units])     
     
-    return output
+    state_out = LSTMStateTuple(c, h)
+    
+    return output, state_out
 
 
 def LSTM_NoteWise_Layer(input_data, num_class=3):
