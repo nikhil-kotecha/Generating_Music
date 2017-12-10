@@ -11,11 +11,14 @@ def Input_Kernel(input_data, Midi_low=24, Midi_high=102):
         Note_State_Batch: size = [batch_size x num_notes x num_timesteps]
         Midi_low: integer
         Midi_high: integer
-    """
-    # Input Kernel Pre-processing segments
-    batch_size = input_data.get_shape()[0].value
+    
+    Need to convert this to numpy to handle variable batch/time lengths
+    """    
+    
+    # batch_size and num_timesteps are variable length
+    batch_size = tf.shape(input_data)[0]
     num_notes = input_data.get_shape()[1].value
-    num_timesteps = input_data.get_shape()[2].value
+    num_timesteps = tf.shape(input_data)[2]
     
     # MIDI note number
     Midi_indices = tf.range(start=Midi_low, limit = Midi_high+1, delta=1)
@@ -24,7 +27,7 @@ def Input_Kernel(input_data, Midi_low=24, Midi_high=102):
 
     
     # part_pitchclass
-    Midi_pitchclasses = tf.squeeze(x_Midi % 12)
+    Midi_pitchclasses = tf.squeeze(x_Midi % 12, axis = 3)
     x_pitch_class = tf.one_hot(Midi_pitchclasses, depth=12)
     #print('x_pitch_class shape = ', x_pitch_class.get_shape())
     #print('')
@@ -74,7 +77,7 @@ def Input_Kernel(input_data, Midi_low=24, Midi_high=102):
 def LSTM_TimeWise_Training_Layer(input_data, num_units=50):
     """
     Arguments:
-        input_data: size = [batch_size x num_notes x num_timesteps x input_size]
+        input_data: Tensor with size = [batch_size x num_notes x num_timesteps x input_size]
         num_units: integer
         
     # LSTM time-wise 
@@ -89,11 +92,12 @@ def LSTM_TimeWise_Training_Layer(input_data, num_units=50):
     # will be reshaped at the end of this block for the next stage
   """  
     
-    
-    batch_size = input_data.get_shape()[0].value
+    # batch_size and num_timesteps are variable length
+    batch_size = tf.shape(input_data)[0]
     num_notes = input_data.get_shape()[1].value
-    num_timesteps = input_data.get_shape()[2].value
+    num_timesteps = tf.shape(input_data)[2]
     input_size = input_data.get_shape()[3].value
+    
     
     #Flatten input to allow note steps to be run in parallel as separate batches for this segment
     input_flatten = tf.reshape(input_data, shape=[batch_size*num_notes, num_timesteps, input_size])
@@ -137,11 +141,11 @@ def LSTM_NoteWise_Layer(input_data, num_class=3):
     #    - 2: note is played and articulated
     """
     
-    #Extract Input Data dimensions
-    batch_size = input_data.get_shape()[0].value
+    # batch_size and num_timesteps are variable length
+    batch_size = tf.shape(input_data)[0]
     num_notes = input_data.get_shape()[1].value
-    num_timesteps = input_data.get_shape()[2].value
-    num_units = input_data.get_shape()[3].value  
+    num_timesteps = tf.shape(input_data)[2]
+    num_units = input_data.get_shape()[3].value
 
     # Reshape the input
     # batch_size and num_timesteps dimensions of input are flattened to treat as single 'batch' dimension for LSTM cell
@@ -202,21 +206,25 @@ def Loss_Function(Note_State_Batch, logP):
     """   
 
     
-    #Extract Input Data dimensions
-    batch_size = logP.get_shape()[0].value
+    # batch_size and num_timesteps are variable length
+    batch_size = tf.shape(logP)[0]
     num_notes = logP.get_shape()[1].value
-    num_timesteps = logP.get_shape()[2].value
-    num_class = logP.get_shape()[3].value 
+    num_timesteps = tf.shape(logP)[2]
+    num_class = logP.get_shape()[3].value
     
-    assert Note_State_Batch.get_shape()[0].value == logP.get_shape()[0].value
-    assert Note_State_Batch.get_shape()[1].value == logP.get_shape()[1].value
-    assert Note_State_Batch.get_shape()[2].value == logP.get_shape()[2].value
+    #assert Note_State_Batch.get_shape()[0].value == logP.get_shape()[0].value
+    #assert Note_State_Batch.get_shape()[1].value == logP.get_shape()[1].value
+    #assert Note_State_Batch.get_shape()[2].value == logP.get_shape()[2].value
 
 
     # Line up logP with future input data
     logP_align = tf.slice(logP, [0,0,0,0],[batch_size, num_notes, num_timesteps-1, num_class])
-    Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1],[batch_size, num_notes, num_timesteps-1]), dtype=tf.int64)
+    print('logP : ', logP)
+    print('logP align: ', logP_align)
 
+    Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1],[batch_size, num_notes, num_timesteps-1]), dtype=tf.int64)
+    print('Note_State_Batch: ', Note_State_Batch)
+    print('Note_State_Batch_align: ', Note_State_Batch_align)
 
 
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logP_align,labels=Note_State_Batch_align) 
