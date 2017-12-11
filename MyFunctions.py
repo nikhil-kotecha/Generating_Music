@@ -16,7 +16,7 @@ With numpy,
 #return Note_State_Expand, prev_input
 
 
-def Input_Kernel(input_data, prev_sample, Midi_low=24, Midi_high=102):
+def Input_Kernel(input_data, prev_t_sample, Midi_low=24, Midi_high=102):
     """
     Arguments:
         Note_State_Batch: size = [batch_size x num_notes x num_timesteps]
@@ -32,12 +32,12 @@ def Input_Kernel(input_data, prev_sample, Midi_low=24, Midi_high=102):
     num_timesteps = tf.shape(input_data)[2]
     
     
-    input_prev = tf.concat([prev_sample, tf.slice(input_data, [0,0,0], [batch_size, num_notes, num_timesteps-1])], axis=2)
-    latest_sample = tf.expand_dims(input_data[:,:,num_timesteps-1], axis=2)
+    input_prev = tf.concat([prev_t_sample, tf.slice(input_data, [0,0,0], [batch_size, num_notes, num_timesteps-1])], axis=2)
+    final_t_sample = tf.expand_dims(input_data[:,:,num_timesteps-1], axis=2)
     
-    print('input shape = ', input_data.get_shape())
-    print('input prev shape = ', input_prev.get_shape())
-    print('latest sample shape = ', latest_sample.get_shape())
+    #print('input shape = ', input_data.get_shape())
+    #print('input prev shape = ', input_prev.get_shape())
+    #print('latest sample shape = ', latest_sample.get_shape())
     
     # MIDI note number
     Midi_indices = tf.range(start=Midi_low, limit = Midi_high+1, delta=1)
@@ -57,7 +57,7 @@ def Input_Kernel(input_data, prev_sample, Midi_low=24, Midi_high=102):
     filt_vicinity = tf.reshape(tf.reverse(tf.eye(25), axis=[0]), [25,1,25])
     prev_vicinity = tf.nn.conv1d(NSB_prev_flatten, filt_vicinity, stride=1, padding='SAME')
     x_prev_vicinity = tf.reshape(prev_vicinity, shape=[batch_size, num_notes, num_timesteps, 25])
-    print('x_prev vicinity shape = ', x_prev_vicinity.get_shape())
+    #print('x_prev vicinity shape = ', x_prev_vicinity.get_shape())
 
  
     
@@ -83,7 +83,7 @@ def Input_Kernel(input_data, prev_sample, Midi_low=24, Midi_high=102):
     Note_State_Expand = tf.concat([tf.cast(x_Midi,dtype=tf.float32), x_pitch_class, x_prev_vicinity, x_prev_context, x_beat, x_zero], axis=-1)
     
     
-    return Note_State_Expand, latest_sample, input_prev
+    return Note_State_Expand, final_t_sample
 
 
 
