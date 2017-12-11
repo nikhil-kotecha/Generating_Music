@@ -4,72 +4,86 @@ from tensorflow.python.ops import math_ops
 from tensorflow.contrib.rnn import BasicLSTMCell
 from tensorflow.contrib.rnn import LSTMStateTuple
 
+#def Input_Kernel_numpy(input_data, Midi_low=24, Midi_high=102):
+"""
+Arguments:
+Note_State_Batch: numpy size = [batch_size x num_notes x num_timesteps]
+Midi_low: integer
+Midi_high: integer
+    
+With numpy, 
+"""    
+#return Note_State_Expand, prev_input
 
-def Input_Kernel(input_data, Midi_low=24, Midi_high=102):
+
+def Input_Kernel(input_data, prev_sample, Midi_low=24, Midi_high=102):
     """
     Arguments:
         Note_State_Batch: size = [batch_size x num_notes x num_timesteps]
         Midi_low: integer
         Midi_high: integer
     
-    Need to convert this to numpy to handle variable batch/time lengths
     """    
+
     
     # batch_size and num_timesteps are variable length
     batch_size = tf.shape(input_data)[0]
     num_notes = input_data.get_shape()[1].value
     num_timesteps = tf.shape(input_data)[2]
     
+    
+    input_prev = tf.concat([prev_sample, tf.slice(input_data, [0,0,0], [batch_size, num_notes, num_timesteps-1])], axis=2)
+    latest_sample = tf.expand_dims(input_data[:,:,num_timesteps-1], axis=2)
+    
+    print('input shape = ', input_data.get_shape())
+    print('input prev shape = ', input_prev.get_shape())
+    print('latest sample shape = ', latest_sample.get_shape())
+    
     # MIDI note number
     Midi_indices = tf.range(start=Midi_low, limit = Midi_high+1, delta=1)
     x_Midi = tf.reshape(tf.tile(Midi_indices, multiples=[batch_size*num_timesteps]), shape=[batch_size, num_notes, num_timesteps,1])
+    #x_Midi_align = tf.slice(x_Midi, [0,0,1,0], size=[batch_size, num_notes, num_timesteps-1, 1])
     #print('x_Midi shape = ', x_Midi.get_shape())
 
     
     # part_pitchclass
     Midi_pitchclasses = tf.squeeze(x_Midi % 12, axis = 3)
     x_pitch_class = tf.one_hot(Midi_pitchclasses, depth=12)
-    #print('x_pitch_class shape = ', x_pitch_class.get_shape())
-    #print('')
+
     
     
     # part_prev_vicinity (need to change to 1 time step in past)
-    NSB_flatten = tf.reshape(input_data, [batch_size*num_timesteps, num_notes, 1])
+    NSB_prev_flatten = tf.reshape(input_prev, [batch_size*num_timesteps, num_notes, 1])
     filt_vicinity = tf.reshape(tf.reverse(tf.eye(25), axis=[0]), [25,1,25])
-    prev_vicinity = tf.nn.conv1d(NSB_flatten, filt_vicinity, stride=1, padding='SAME')
-    x_vicinity = tf.reshape(prev_vicinity, shape=[batch_size, num_notes, num_timesteps, 25])
-    #print('NSB flat shape', NSB_flatten.get_shape())
-    #print('x_vicinity shape = ', x_vicinity.get_shape())
-    #print('')
-    
+    prev_vicinity = tf.nn.conv1d(NSB_prev_flatten, filt_vicinity, stride=1, padding='SAME')
+    x_prev_vicinity = tf.reshape(prev_vicinity, shape=[batch_size, num_notes, num_timesteps, 25])
+    print('x_prev vicinity shape = ', x_prev_vicinity.get_shape())
+
+ 
     
     #part_prev_context (need to change it to 1 time step in past)
-    NSB_flat_bool = tf.minimum(NSB_flatten,1) # 1 if note is played, 0 if not played
+    NSB_prev_flat_bool = tf.minimum(NSB_prev_flatten,1) # 1 if note is played, 0 if not played
     filt_context = tf.expand_dims(tf.tile(tf.reverse(tf.eye(12), axis=[0]), multiples=[(num_notes // 12)*2,1]), axis=1)
-    #print('NSB flat bool = ', NSB_flat_bool.get_shape())
-    #print('filt context shape = ', filt_context.get_shape())
-    context = tf.nn.conv1d(NSB_flat_bool, filt_context, stride=1, padding='SAME')
-    x_context = tf.reshape(context, shape=[batch_size, num_notes, num_timesteps, 12])
-    #print('x context shape = ',x_context.get_shape())
-    #print('')
+    context = tf.nn.conv1d(NSB_prev_flat_bool, filt_context, stride=1, padding='SAME')
+    x_prev_context = tf.reshape(context, shape=[batch_size, num_notes, num_timesteps, 12])
+
     
     
     #beat
     Time_indices = tf.range(num_timesteps)
     x_Time = tf.reshape(tf.tile(Time_indices, multiples=[batch_size*num_notes]), shape=[batch_size, num_notes, num_timesteps,1])
     x_beat = tf.cast(tf.concat([x_Time%2, x_Time//2%2, x_Time//4%2, x_Time//8%2], axis=-1), dtype=tf.float32)
-    #print('x beat shape = ', x_beat.get_shape())
-    #print('')
+
     
     #zero
     x_zero = tf.zeros([batch_size, num_notes, num_timesteps,1])
 
 
     #Final Vector
-    Note_State_Expand = tf.concat([tf.cast(x_Midi,dtype=tf.float32), x_pitch_class, x_vicinity, x_context, x_beat, x_zero], axis=-1)
+    Note_State_Expand = tf.concat([tf.cast(x_Midi,dtype=tf.float32), x_pitch_class, x_prev_vicinity, x_prev_context, x_beat, x_zero], axis=-1)
     
     
-    return Note_State_Expand
+    return Note_State_Expand, latest_sample, input_prev
 
 
 
@@ -168,7 +182,7 @@ def LSTM_NoteWise_Layer(input_data, num_class=3):
     lstmcell_note = BasicLSTMCell(num_units=num_class, forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
 
 
-    #Set values for initial LSTM state and sampled note
+    #Set values for initial LSTM state and sampled note.  Zero notes always played below bottom note
     logP_state_initial = tf.zeros([batch_size*num_timesteps, num_class])
     pa_gen_initial = tf.zeros([batch_size*num_timesteps,1])
 
@@ -226,12 +240,12 @@ def Loss_Function(Note_State_Batch, logP):
 
     # Line up logP with future input data
     logP_align = tf.slice(logP, [0,0,0,0],[batch_size, num_notes, num_timesteps-1, num_class])
-    print('logP : ', logP)
-    print('logP align: ', logP_align)
+    #print('logP : ', logP)
+    #print('logP align: ', logP_align)
 
     Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1],[batch_size, num_notes, num_timesteps-1]), dtype=tf.int64)
-    print('Note_State_Batch: ', Note_State_Batch)
-    print('Note_State_Batch_align: ', Note_State_Batch_align)
+    #print('Note_State_Batch: ', Note_State_Batch)
+    #print('Note_State_Batch_align: ', Note_State_Batch_align)
 
 
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logP_align,labels=Note_State_Batch_align) 
