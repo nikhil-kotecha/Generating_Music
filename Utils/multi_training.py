@@ -1,8 +1,8 @@
 import os, random
-from Utils.midi_to_statematrix import *
+from Utils.midi_musical_matrix import *
 from Utils.data import *
 import pickle
-
+import numpy
 import signal
 
 batch_width = 10 # number of sequences in a batch
@@ -10,7 +10,6 @@ batch_len = 16*8 # length of each sequence
 division_len = 16 # interval between possible start locations
 
 def loadPieces(dirpath):
-
     pieces = {}
 
     for fname in os.listdir(dirpath):
@@ -19,17 +18,23 @@ def loadPieces(dirpath):
 
         name = fname[:-4]
 
-        outMatrix = midiToNoteStateMatrix(os.path.join(dirpath, fname))
+        try:
+            outMatrix = midiToNoteStateMatrix(os.path.join(dirpath, fname))
+        except:
+            print('Skip bad file = ', name)
+            outMatrix=[]
+            
         if len(outMatrix) < batch_len:
             continue
 
         pieces[name] = outMatrix
         print ("Loaded {}".format(name))
-
     return pieces
 
+
+
 def getPieceSegment(pieces):
-    piece_output = random.choice(pieces.values())
+    piece_output = random.choice(list(pieces.values()))
     start = random.randrange(0,len(piece_output)-batch_len,division_len)
     # print "Range is {} {} {} -> {}".format(0,len(piece_output)-batch_len,division_len, start)
 
@@ -40,7 +45,7 @@ def getPieceSegment(pieces):
 
 def getPieceBatch(pieces):
     i,o = zip(*[getPieceSegment(pieces) for _ in range(batch_width)])
-    return numpy.array(i), numpy.array(o)
+    return np.array(i), np.array(o)
 
 def trainPiece(model,pieces,epochs,start=0):
     stopflag = [False]

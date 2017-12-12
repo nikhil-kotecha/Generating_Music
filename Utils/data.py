@@ -1,5 +1,5 @@
 import itertools
-from Utils.midi_to_statematrix import upperBound, lowerBound
+from Utils.midi_musical_matrix import upperBound, lowerBound
 
 def startSentinel():
     def noteSentinel(note):
