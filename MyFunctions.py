@@ -140,7 +140,7 @@ def LSTM_TimeWise_Training_Layer(input_data, state_in):
     return output, state_out
 
 
-def LSTM_NoteWise_Layer(input_data, num_class=3):
+def LSTM_NoteWise_Layer(input_data, num_class=2):
     """
     Arguments:
         input_data: size = [batch_size x num_notes x num_timesteps x num_hidden_units]
@@ -179,30 +179,47 @@ def LSTM_NoteWise_Layer(input_data, num_class=3):
 
 
     #Instantiate Note-Wise Cell
-    lstmcell_note = BasicLSTMCell(num_units=num_class, forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
+    lstmcell_note = BasicLSTMCell(num_units=4, forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
 
 
     #Set values for initial LSTM state and sampled note.  Zero notes always played below bottom note
-    logP_state_initial = tf.zeros([batch_size*num_timesteps, num_class])
-    pa_gen_initial = tf.zeros([batch_size*num_timesteps,1])
+    logP_state_initial = tf.zeros([batch_size*num_timesteps, 4])
+    pa_gen_initial = tf.zeros([batch_size*num_timesteps,2, 1])
 
     logP_n_state = LSTMStateTuple(logP_state_initial, logP_state_initial) #(c, h)
-    pa_gen_n = pa_gen_initial
+    pa_gen_n_unflat = pa_gen_initial
 
     logP_out_list=[]
     pa_gen_out_list=[]
-
+    print('notewise shape = ', notewise_in.get_shape())
+    print('pa_gen_n shape = ', pa_gen_n_unflat.get_shape())
+    
+    
+    
     #Run through notes for note-wise LSTM to obtain P(va(n) | va(<n))
     for n in range(num_notes):    
-        cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(pa_gen_n, dtype=tf.float32)], axis=1)
-        logP_n_out, logP_n_state = lstmcell_note(cell_inputs, logP_n_state)
-        pa_gen_n = tf.multinomial(logits=logP_n_out, num_samples=1)   
-        logP_out_list.append(logP_n_out)
-        pa_gen_out_list.append(pa_gen_n)
+        #concatenate previously sampled note play-articulate-combo with timewise output
+        p_gen = tf.squeeze(tf.slice(pa_gen_n_unflat, [0,0,0],[-1,1,-1]), axis=2)
+        a_gen = tf.squeeze(tf.slice(pa_gen_n_unflat, [0,1,0],[-1,1,-1]), axis=2)
+        cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(p_gen, dtype=tf.float32),  tf.cast(a_gen, dtype=tf.float32)], axis=1)
+        #print('Cell inputs shape = ', cell_inputs.get_shape())
+        #print('logP_n_state shape = ', logP_n_state[0].get_shape())
+        
+        # Run single note step of LSTM cell and reshape output from [batch_size*num_timesteps, 4] [batch_size*num_timesteps*2, 2]
+        logP_n_out, logP_n_state = lstmcell_note(cell_inputs, logP_n_state)       
+        logP_n_out_unflat = tf.reshape(logP_n_out, shape=[batch_size*num_timesteps*2, 2])
+        
+        # Sample play and articulate from logPout distribution and reshape 
+        pa_gen_n = tf.multinomial(logits=logP_n_out_unflat, num_samples=1)          
+        pa_gen_n_unflat = tf.reshape(pa_gen_n, shape=[batch_size*num_timesteps, 2, 1])
+        
+        #Append to notewise list
+        logP_out_list.append(logP_n_out_unflat)
+        pa_gen_out_list.append(pa_gen_n_unflat)
     
     # Convert output list to a Tensor
-    logP_out = tf.reshape(tf.stack(logP_out_list, axis=1), [batch_size, num_notes, num_timesteps, num_class])
-    pa_gen_out = tf.reshape(tf.stack(pa_gen_out_list, axis=1),  [batch_size, num_notes, num_timesteps, 1])
+    logP_out = tf.reshape(tf.stack(logP_out_list, axis=1), [batch_size, num_notes, num_timesteps, 2, 2])
+    pa_gen_out = tf.reshape(tf.stack(pa_gen_out_list, axis=1),  [batch_size, num_notes, num_timesteps, 2])
 
 
     
@@ -213,8 +230,8 @@ def LSTM_NoteWise_Layer(input_data, num_class=3):
 def Loss_Function(Note_State_Batch, logP):
     """
     Arguments:
-        Note State Batch: shape = [batch_size x num_notes, num_timesteps]
-        batch of log probabilities: shape = [batch_size x num_notes, num_timesteps, num_class]
+        Note State Batch: shape = [batch_size x num_notes x num_timesteps x 2]
+        batch of log probabilities: shape = [batch_size x num_notes x num_timesteps x 2 x 2]
         
     # This section is the Loss Function Block
     # logP out is the 3x play-articulate log probabilities for each note, at every time step, for every batch
@@ -231,7 +248,7 @@ def Loss_Function(Note_State_Batch, logP):
     batch_size = tf.shape(logP)[0]
     num_notes = logP.get_shape()[1].value
     num_timesteps = tf.shape(logP)[2]
-    num_class = logP.get_shape()[3].value
+    
     
     #assert Note_State_Batch.get_shape()[0].value == logP.get_shape()[0].value
     #assert Note_State_Batch.get_shape()[1].value == logP.get_shape()[1].value
@@ -239,11 +256,11 @@ def Loss_Function(Note_State_Batch, logP):
 
 
     # Line up logP with future input data
-    logP_align = tf.slice(logP, [0,0,0,0],[batch_size, num_notes, num_timesteps-1, num_class])
+    logP_align = tf.slice(logP, [0,0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2, 2])
     #print('logP : ', logP)
     #print('logP align: ', logP_align)
 
-    Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1],[batch_size, num_notes, num_timesteps-1]), dtype=tf.int64)
+    Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1, 0],[batch_size, num_notes, num_timesteps-1, 2]), dtype=tf.int64)
     #print('Note_State_Batch: ', Note_State_Batch)
     #print('Note_State_Batch_align: ', Note_State_Batch_align)
 

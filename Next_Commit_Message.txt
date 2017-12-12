@@ -1,4 +1,7 @@
-- added Next_Commit_Message.txt file to accumulate changes for next commit
-- added try/except for when loading .MIDI files.  files with bad byte values are skipped.
-- added loading/preprocessing of training files in the Main.ipynb (going with dual binary state form)
-- need to rework loss function to accomodate the dual binary state 
+Rough Training Functionality
+
+- modified training graph to use dual binary values (i.e. [0,0], [0,1], [1,0])
+- each training batch is drawn from the list of imported .midi files using getPieceBatch
+- able to get loss function to decrease
+- due to author's method of preprocessing, our way of handling single-timestep batches is temporarily broken.  
+- This can be fixed by only using the Note State Matrix from the author's function and go back to using our graph function to generate the 80 element vector
