@@ -1,4 +1,8 @@
 ###source: https://github.com/dshieble/Music_RBM/blob/master/midi_manipulation.py
+#contains functions:
+#### midi -> note state matrix
+#### midi -> note state matrix 1D
+#### note state matrix -> midi
 
 import midi
 import numpy as np
