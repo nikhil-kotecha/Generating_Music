@@ -1,2 +1,2 @@
-model_checkpoint_path: "First_Trial"
-all_model_checkpoint_paths: "First_Trial"
+model_checkpoint_path: "AdamOptimizer"
+all_model_checkpoint_paths: "AdamOptimizer"
