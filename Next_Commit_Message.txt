@@ -1,7 +1,5 @@
-Rough Training Functionality
+Updated graph to only require Note State Matrix at input
 
-- modified training graph to use dual binary values (i.e. [0,0], [0,1], [1,0])
-- each training batch is drawn from the list of imported .midi files using getPieceBatch
-- able to get loss function to decrease
-- due to author's method of preprocessing, our way of handling single-timestep batches is temporarily broken.  
-- This can be fixed by only using the Note State Matrix from the author's function and go back to using our graph function to generate the 80 element vector
+- took the author's NoteStateInput Form function out of the process, and replaced it with tensorflow graph.  
+- This made it easier to handle single time step batches required for music generation.  Also makes us less reliant on outside code.
+- able to train model, save parameters, generate music, and save output 'Note State Matrix'.
