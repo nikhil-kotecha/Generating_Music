@@ -1,5 +1,4 @@
-Full End-to-End Process Up and Running
-
-- calling the matrix-to-midi functions at the end of the Main file to save generate music to the folder "Generated_Midi_Files"
-- Presently, the generated music sounds like random notes.  
-- Will go through and double check the code, add multiple LSTM layer capacity, and get running on GPU
+Code Cleanup
+- cleaned up many issues with the input kernel (this generates the equivalent of the author's InputForm.
+- I was using tf.reshape function too freely, and it wasn't slicing things up as expected.
+- Verified numerically that the note stand expand puts out the right values

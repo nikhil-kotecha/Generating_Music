@@ -16,14 +16,13 @@ With numpy,
 #return Note_State_Expand, prev_input
 
 
-def Input_Kernel(input_data, prev_t_sample, Midi_low, Midi_high):
+def Input_Kernel(input_data, Midi_low, Midi_high, time_init=0):
     """
     Arguments:
-        Note_State_Batch: size = [batch_size x num_notes x num_timesteps x 2]
-        prev_t_sample: size = [batch_size x num_notes x 1 x 2]
+        input_data: size = [batch_size x num_notes x num_timesteps x 2] 
         Midi_low: integer
         Midi_high: integer
-    
+    the input data represents that at the previous timestep of what we are trying to predict
     """    
 
     
@@ -33,67 +32,63 @@ def Input_Kernel(input_data, prev_t_sample, Midi_low, Midi_high):
     num_timesteps = tf.shape(input_data)[2]
     
     
-    input_prev = tf.concat([prev_t_sample, tf.slice(input_data, [0,0,0,0], [batch_size, num_notes, num_timesteps-1, 2])], axis=2)
-    final_t_sample = tf.expand_dims(input_data[:,:,num_timesteps-1,:], axis=2)
-    
-    #print('input shape = ', input_data.get_shape())
-    #print('input prev shape = ', input_prev.get_shape())
-    print('final_t_sample shape = ', final_t_sample.get_shape())
     
     # MIDI note number
-    Midi_indices = tf.range(start=Midi_low, limit = Midi_high+1, delta=1)
-    x_Midi = tf.reshape(tf.tile(Midi_indices, multiples=[batch_size*num_timesteps]), shape=[batch_size, num_notes, num_timesteps,1])
-    #x_Midi_align = tf.slice(x_Midi, [0,0,1,0], size=[batch_size, num_notes, num_timesteps-1, 1])
+    Midi_indices = tf.squeeze(tf.range(start=Midi_low, limit = Midi_high+1, delta=1))
+    x_Midi = tf.ones((batch_size, num_timesteps, 1, num_notes))*tf.cast(Midi_indices, dtype=tf.float32)
+    x_Midi = tf.transpose(x_Midi, perm=[0,3,1,2]) # shape = batch_size, num_notes, num_timesteps, 1
     #print('x_Midi shape = ', x_Midi.get_shape())
 
     
     # part_pitchclass
-    Midi_pitchclasses = tf.squeeze(x_Midi % 12, axis = 3)
-    x_pitch_class = tf.one_hot(Midi_pitchclasses, depth=12)
+    Midi_pitchclasses = tf.squeeze(x_Midi % 12, axis=3)
+    #Midi_pitchclasses = tf.squeeze(x_Midi % 12, axis = 3)
+    x_pitch_class = tf.one_hot(tf.cast(Midi_pitchclasses, dtype=tf.uint8), depth=12)
     #print('x_pitch_class shape = ', x_pitch_class.get_shape())
     
    
     # part_prev_vicinity (1 time step in past)
-    NSB_prev_flatten = tf.reshape(input_prev, [batch_size*num_timesteps, num_notes, 2]) # channel for play and channel for articulate
-    NSB_prev_flatten_p = tf.slice(NSB_prev_flatten, [0,0,0],size=[-1, -1, 1])
-    NSB_prev_flatten_a = tf.slice(NSB_prev_flatten, [0,0,1],size=[-1, -1, 1])
+    input_flatten = tf.transpose(input_data, perm=[0,2,1,3])
+    input_flatten = tf.reshape(input_flatten, [batch_size*num_timesteps, num_notes, 2]) # channel for play and channel for articulate
+    input_flatten_p = tf.slice(input_flatten, [0,0,0],size=[-1, -1, 1])
+    input_flatten_a = tf.slice(input_flatten, [0,0,1],size=[-1, -1, 1])
     
     # reverse identity kernel
-    filt_vicinity = tf.expand_dims(tf.reverse(tf.eye(25), axis=[0]), axis=1)
+    filt_vicinity = tf.expand_dims(tf.eye(25), axis=1)
 
    
     #1D convolutional filter for each play and articulate arrays 
-    prev_vicinity_p = tf.nn.conv1d(NSB_prev_flatten_p, filt_vicinity, stride=1, padding='SAME')
-    prev_vicinity_a = tf.nn.conv1d(NSB_prev_flatten_p, filt_vicinity, stride=1, padding='SAME')    
+    vicinity_p = tf.nn.conv1d(input_flatten_p, filt_vicinity, stride=1, padding='SAME')
+    vicinity_a = tf.nn.conv1d(input_flatten_a, filt_vicinity, stride=1, padding='SAME')    
     
     #concatenate back together and restack such that play-articulate numbers alternate
-    prev_vicinity = tf.stack([prev_vicinity_p, prev_vicinity_a], axis=3)
-    prev_vicinity = tf.unstack(prev_vicinity, axis=2)
-    prev_vicinity = tf.concat(prev_vicinity, axis=2)
+    vicinity = tf.stack([vicinity_p, vicinity_a], axis=3)
+    vicinity = tf.unstack(vicinity, axis=2)
+    vicinity = tf.concat(vicinity, axis=2)
     
-    
-    x_prev_vicinity = tf.reshape(prev_vicinity, shape=[batch_size, num_notes, num_timesteps, 50])
-    #print('x_prev vicinity shape = ', x_prev_vicinity.get_shape())
-
- 
-    
+    #reshape by major dimensions, THEN swap axes
+    x_vicinity = tf.reshape(vicinity, shape=[batch_size, num_timesteps, num_notes, 50])
+    x_vicinity = tf.transpose(x_vicinity, perm=[0,2,1,3])
+    #print('x_prev vicinity shape = ', x_vicinity.get_shape())  
    
 
     #part_prev_context (1 time step in past)
-    NSB_prev_flat_bool = tf.minimum(tf.slice(NSB_prev_flatten,[0,0,0],size=[-1,-1,1]),1) 
+    input_flatten_p_bool = tf.minimum(input_flatten_p,1) 
     # 1 if note is played, 0 if not played.  Don't care about articulation
     
     #kernel
-    filt_context = tf.expand_dims(tf.tile(tf.reverse(tf.eye(12), axis=[0]), multiples=[(num_notes // 12)*2,1]), axis=1)
+    filt_context = tf.expand_dims(tf.tile(tf.eye(12), multiples=[(num_notes // 12)*2,1]), axis=1)
+    #print('filt_context size = ', filt_context.get_shape())
        
-    context = tf.nn.conv1d(NSB_prev_flat_bool, filt_context, stride=1, padding='SAME')
-    x_prev_context = tf.reshape(context, shape=[batch_size, num_notes, num_timesteps, 12])
+    context = tf.nn.conv1d(input_flatten_p_bool, filt_context, stride=1, padding='SAME')
+    x_context = tf.reshape(context, shape=[batch_size, num_timesteps, num_notes, 12])
+    x_context = tf.transpose(x_context, perm=[0,2,1,3])
     #print('x_prev context shape = ', x_prev_context.get_shape())    
     
     
     
-    #beat
-    Time_indices = tf.range(num_timesteps)
+    #beat - for music generation, need to keep track of 't' from batch to batch (timestep to timestep)
+    Time_indices = tf.range(time_init, num_timesteps + time_init)
     x_Time = tf.reshape(tf.tile(Time_indices, multiples=[batch_size*num_notes]), shape=[batch_size, num_notes, num_timesteps,1])
     x_beat = tf.cast(tf.concat([x_Time%2, x_Time//2%2, x_Time//4%2, x_Time//8%2], axis=-1), dtype=tf.float32)
     #print('x_beat shape = ', x_beat.get_shape()) 
@@ -103,10 +98,10 @@ def Input_Kernel(input_data, prev_t_sample, Midi_low, Midi_high):
 
 
     #Final Vector
-    Note_State_Expand = tf.concat([tf.cast(x_Midi,dtype=tf.float32), x_pitch_class, x_prev_vicinity, x_prev_context, x_beat, x_zero], axis=-1)
+    Note_State_Expand = tf.concat([x_Midi, x_pitch_class, x_vicinity, x_context, x_beat, x_zero], axis=-1)
     
     
-    return Note_State_Expand, final_t_sample
+    return Note_State_Expand, time_init
 
 
 
