@@ -1,4 +1,5 @@
-Code Cleanup
-- cleaned up many issues with the input kernel (this generates the equivalent of the author's InputForm.
-- I was using tf.reshape function too freely, and it wasn't slicing things up as expected.
-- Verified numerically that the note stand expand puts out the right values
+More Code Cleanup
+- cleaned up the LSTM-time and note axis segments.  Found several errors due to mismanagement of reshaping.
+- added ability to specifiy arbitrary number and size of layers for both LSTM-time and note axis segments.
+
+
