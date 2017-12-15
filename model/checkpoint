@@ -1,2 +1,2 @@
-model_checkpoint_path: "AdadeltaOptimizer"
-all_model_checkpoint_paths: "AdadeltaOptimizer"
+model_checkpoint_path: "NoteGen_Fix"
+all_model_checkpoint_paths: "NoteGen_Fix"

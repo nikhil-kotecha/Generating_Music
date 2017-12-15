@@ -220,8 +220,9 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     for n in range(num_notes):    
         #concatenate previously sampled note play-articulate-combo with timewise output
         p_gen = tf.cast(tf.slice(note_gen_n, [0,0],[-1,1]), tf.float32)
-        a_gen = tf.cast(tf.slice(note_gen_n, [0,1],[-1,1]), tf.float32)
-        cell_inputs = tf.concat([notewise_in[:,n,:], p_gen, a_gen], axis=-1)
+        #a_gen = tf.cast(tf.slice(note_gen_n, [0,1],[-1,1]), tf.float32) # only feed back 'play' component, NOT 'articulate'
+        cell_inputs = tf.concat([notewise_in[:,n,:], p_gen], axis=-1)
+
         #print('Cell inputs shape = ', cell_inputs.get_shape())
         
         # output shape = [batch_size*num_timesteps, Nfinal] 
@@ -229,23 +230,37 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         #print('h_final_out shape = ', h_final_out.get_shape())
         #print('h_state len = ', len(h_state))
         
-        # Fully Connected Layer to generate 4 outputs: logP(p=0), logP(p=1), logP(a=0), logP(a=1)
+        # Fully Connected Layer to generate 4 outputs: [logP(p=0), logP(p=1), logP(a=0), logP(a=1)]
         y_n = tf.layers.dense(inputs=h_final_out, units=4, activation=None)
-        #print('y_n shape = ', y_n.get_shape())
+        #print('y_n shape original shape = ', y_n.get_shape())
         
-        # Restack so that shape of [batch_size*num_timesteps, 4] becomes shape=[batch_size*num_timesteps*2, 2] for multinomial argument
-        # Reshape needs to be done by manipulating only the 1st 2 dimensions?       
-        y_n = tf.transpose(y_n, perm=[1,0])
-        y_n = tf.reshape(y_n, shape=[2, 2, batch_size*num_timesteps])
-        y_n = tf.transpose(y_n, perm=[2, 0, 1])
-        y_n = tf.reshape(y_n, shape=[batch_size*num_timesteps*2, 2])
+        # slice output of full connected layer into play and articulate probabilities   
+        y_p_n = tf.slice(y_n, [0,0], [-1,2]) #[logP(p=0), logP(p=1)]
+        y_a_n = tf.slice(y_n, [0,2], [-1,2]) #[logP(a=0), logP(a=1)]
+        #print('y_p_n shape = ', y_p_n.get_shape())
+        #print('y_a_n shape = ', y_a_n.get_shape())
+       
+        # Sample the 'play' and 'articulate' values  from y_p_n and y_a_n (unscaled) log probabilities, respectively
+        p_gen_n = tf.multinomial(logits=y_p_n, num_samples=1) 
+        a_gen_n = tf.multinomial(logits=y_a_n, num_samples=1) 
+      
+        """
+         Network should never generate a 'no play' with an 'articulate'.  
+         This unnecessarily penalizes notes that are (correctly) rested but perceived by the network to require 'articulation'
+         In addition, the Midi-to-Matrix function never generates this condition, so during music generation, feeding this condition into              the next batch creates inputs that the model has never seen.
+        """        
         
-        # Sample the 'play' and 'articulate' values from y_out log probabilities  
-        note_gen_n = tf.multinomial(logits=y_n, num_samples=1)          
-        note_gen_n = tf.squeeze(note_gen_n, axis=-1)
-        note_gen_n = tf.reshape(note_gen_n, shape=[batch_size*num_timesteps, 2])        
+        a_mask_gen_n = tf.multiply(p_gen_n, a_gen_n) # if a given note is not played, automatically set articulate to zero.
+        note_gen_n = tf.concat([p_gen_n, a_mask_gen_n], axis=1) # concatenate
         
-        # Reshape                         
+        #print('note_gen_n final shape = ', note_gen_n.get_shape())
+        
+        # Concatenate y_n back together such that the logp=1/0 is the last dimension
+        y_n = tf.stack([y_p_n, y_a_n], axis=2) # now y_n point is 2 x 2 with last dimension being [play, articulate]
+        y_n = tf.transpose(y_n, perm=[0, 2, 1])# now last dimension is [prob = 1, prob = 0]
+        #dimensions of y_n are: [batch_size*num_timesteps, 2, 2]
+        
+        # Reshape back into batch and timesteps dimensions                        
         y_n_unflat = tf.reshape(y_n, shape=[batch_size, num_timesteps, 2, 2])
         note_gen_n_unflat = tf.reshape(note_gen_n, shape=[batch_size, num_timesteps, 2])
         
