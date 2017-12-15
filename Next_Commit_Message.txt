@@ -1,3 +1,5 @@
-Flattened Directory for Convenience
+Updates
 
--removed Utils folder and placed contents in the main folder
+- created Max_time_steps as an argument to "loadPieces" for importing MIDI files.  Allows variable lower bound on file length
+- modified getPieceSegment and getPieceBatch with arguments batch_size and num_time_steps.  During training, batch_size and num_time_steps can be specified at any/every step.  num_time_steps must be shorter than Max_time_steps
+- fixed a typo in the Note-wise LSTM graph creation cell.  

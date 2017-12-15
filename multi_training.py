@@ -5,11 +5,11 @@ import pickle
 import numpy
 import signal
 
-batch_width = 10 # number of sequences in a batch
-batch_len = 16*8 # length of each sequence
+#batch_width = 10 # number of sequences in a batch (use as argument)
+#batch_len = 16*8 # length of each sequence
 division_len = 16 # interval between possible start locations
 
-def loadPieces(dirpath):
+def loadPieces(dirpath, max_time_steps):
     pieces = {}
 
     for fname in os.listdir(dirpath):
@@ -24,7 +24,7 @@ def loadPieces(dirpath):
             print('Skip bad file = ', name)
             outMatrix=[]
             
-        if len(outMatrix) < batch_len:
+        if len(outMatrix) < max_time_steps:
             continue
 
         pieces[name] = outMatrix
@@ -33,18 +33,18 @@ def loadPieces(dirpath):
 
 
 
-def getPieceSegment(pieces):
+def getPieceSegment(pieces, num_time_steps):
     piece_output = random.choice(list(pieces.values()))
-    start = random.randrange(0,len(piece_output)-batch_len,division_len)
-    # print "Range is {} {} {} -> {}".format(0,len(piece_output)-batch_len,division_len, start)
+    start = random.randrange(0,len(piece_output)-num_time_steps,division_len)
+    # print "Range is {} {} {} -> {}".format(0,len(piece_output)-num_time_steps,division_len, start)
 
-    seg_out = piece_output[start:start+batch_len]
+    seg_out = piece_output[start:start+num_time_steps]
     seg_in = noteStateMatrixToInputForm(seg_out)
 
     return seg_in, seg_out
 
-def getPieceBatch(pieces):
-    i,o = zip(*[getPieceSegment(pieces) for _ in range(batch_width)])
+def getPieceBatch(pieces, batch_size, num_time_steps):
+    i,o = zip(*[getPieceSegment(pieces, num_time_steps) for _ in range(batch_size)])
     return np.array(i), np.array(o)
 
 def trainPiece(model,pieces,epochs,start=0):
