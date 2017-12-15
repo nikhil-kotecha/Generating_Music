@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import math_ops
 from tensorflow.contrib.rnn import BasicLSTMCell
+from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import LSTMStateTuple
 
 
@@ -97,7 +98,7 @@ def Input_Kernel(input_data, Midi_low, Midi_high, time_init):
 
 
 
-def LSTM_TimeWise_Training_Layer(input_data, state_init):
+def LSTM_TimeWise_Training_Layer(input_data, state_init, output_keep_prob=1.0):
     """
     Arguments:
         input_data: Tensor with size = [batch_size x num_notes x num_timesteps x input_size]
@@ -136,6 +137,7 @@ def LSTM_TimeWise_Training_Layer(input_data, state_init):
     for h in range(num_layers):
         num_states.append(state_init[h][0].get_shape()[1].value)
         lstm_cell = BasicLSTMCell(num_units=num_states[h], forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
+        lstm_cell = DropoutWrapper(lstm_cell, output_keep_prob=output_keep_prob)
         cell_list.append(lstm_cell)
     
 
@@ -151,7 +153,7 @@ def LSTM_TimeWise_Training_Layer(input_data, state_init):
     return output, state_out
 
 
-def LSTM_NoteWise_Layer(input_data, state_init, num_class=2):
+def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=2):
     """
     Arguments:
         input_data: size = [batch_size x num_notes x num_timesteps x size_input]
@@ -193,6 +195,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, num_class=2):
     for h in range(num_layers):
         num_states.append(state_init[h][0].get_shape()[1].value)
         lstm_cell = BasicLSTMCell(num_units=num_states[h], forget_bias=1.0, state_is_tuple=True,activation=math_ops.tanh, reuse=None)
+        lstm_cell = DropoutWrapper(lstm_cell, output_keep_prob=output_keep_prob)
         cell_list.append(lstm_cell)
 
     #Instantiate multi layer Time-Wise Cell
