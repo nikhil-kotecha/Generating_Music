@@ -260,7 +260,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         y_n = tf.transpose(y_n, perm=[0, 2, 1])# now last dimension is [prob = 1, prob = 0]
         #dimensions of y_n are: [batch_size*num_timesteps, 2, 2]
         
-        # Reshape back into batch and timesteps dimensions                        
+        # Reshape the 1st dimension back into batch and timesteps dimensions                        
         y_n_unflat = tf.reshape(y_n, shape=[batch_size, num_timesteps, 2, 2])
         note_gen_n_unflat = tf.reshape(note_gen_n, shape=[batch_size, num_timesteps, 2])
         
@@ -271,8 +271,11 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         note_gen_list.append(note_gen_n_unflat)
     
     # Convert output list to a Tensor
-    y_out = tf.reshape(tf.stack(y_list, axis=1), [batch_size, num_notes, num_timesteps, 2, 2])
-    note_gen_out = tf.reshape(tf.stack(note_gen_list, axis=1),  [batch_size, num_notes, num_timesteps, 2])
+    #y_out = tf.reshape(tf.stack(y_list, axis=1), [batch_size, num_notes, num_timesteps, 2, 2])
+    #note_gen_out = tf.reshape(tf.stack(note_gen_list, axis=1),  [batch_size, num_notes, num_timesteps, 2])
+    y_out = tf.stack(y_list, axis=1)
+    note_gen_out = tf.stack(note_gen_list, axis=1)
+
 
 
     
