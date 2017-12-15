@@ -1,5 +1,3 @@
-More Code Cleanup
-- cleaned up the LSTM-time and note axis segments.  Found several errors due to mismanagement of reshaping.
-- added ability to specifiy arbitrary number and size of layers for both LSTM-time and note axis segments.
+Flattened Directory for Convenience
 
-
+-removed Utils folder and placed contents in the main folder

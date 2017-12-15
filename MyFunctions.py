@@ -262,7 +262,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, num_class=2):
 
 
 
-def Loss_Function(Note_State_Batch, logP):
+def Loss_Function(Note_State_Batch, y_in):
     """
     Arguments:
         Note State Batch: shape = [batch_size x num_notes x num_timesteps x 2]
@@ -280,9 +280,9 @@ def Loss_Function(Note_State_Batch, logP):
 
     
     # batch_size and num_timesteps are variable length
-    batch_size = tf.shape(logP)[0]
-    num_notes = logP.get_shape()[1].value
-    num_timesteps = tf.shape(logP)[2]
+    batch_size = tf.shape(y_in)[0]
+    num_notes = y_in.get_shape()[1].value
+    num_timesteps = tf.shape(y_in)[2]
     
     
     #assert Note_State_Batch.get_shape()[0].value == logP.get_shape()[0].value
@@ -291,17 +291,17 @@ def Loss_Function(Note_State_Batch, logP):
 
 
     # Line up logP with future input data
-    logP_align = tf.slice(logP, [0,0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2, 2])
+    y_align = tf.slice(y_in, [0,0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2, 2])
     #print('logP : ', logP)
-    #print('logP align: ', logP_align)
+    print('y_align shape = : ', y_align.get_shape())
 
     Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1, 0],[batch_size, num_notes, num_timesteps-1, 2]), dtype=tf.int64)
     #print('Note_State_Batch: ', Note_State_Batch)
-    #print('Note_State_Batch_align: ', Note_State_Batch_align)
+    print('Note_State_Batch_align shape = : ', Note_State_Batch_align.get_shape())
 
 
-    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logP_align,labels=Note_State_Batch_align) 
+    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_align,labels=Note_State_Batch_align)
     Loss = tf.reduce_mean(cross_entropy)
    
     
-    return Loss
+    return Loss, cross_entropy

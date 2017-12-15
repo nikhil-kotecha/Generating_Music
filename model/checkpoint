@@ -1,2 +1,2 @@
-model_checkpoint_path: "AdamOptimizer"
-all_model_checkpoint_paths: "AdamOptimizer"
+model_checkpoint_path: "AdadeltaOptimizer"
+all_model_checkpoint_paths: "AdadeltaOptimizer"
