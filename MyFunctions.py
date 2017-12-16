@@ -219,7 +219,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         #p_gen = tf.cast(tf.slice(note_gen_n, [0,0],[-1,1]), tf.float32)
         #print('p_gen shape = ', p_gen.get_shape())
         #a_gen = tf.cast(tf.slice(note_gen_n, [0,1],[-1,1]), tf.float32) # only feed back 'play' component, NOT 'articulate'
-        cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(p_gen_n, tf.float32)], axis=-1)
+        cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(p_gen_n, tf.float32),  tf.cast(a_gen_n, tf.float32)], axis=-1)
 
         #print('Cell inputs shape = ', cell_inputs.get_shape())
         
@@ -249,7 +249,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
          In addition, the Midi-to-Matrix function never generates this condition, so during music generation, feeding this condition into              the next batch creates inputs that the model has never seen.
         """        
         
-        a_mask_gen_n = tf.multiply(p_gen_n, a_gen_n) # if a given note is not played, automatically set articulate to zero.
+        a_mask_gen_n = tf.multiply(p_gen_n, a_gen_n) # if a given note is not played (=0), automatically set articulate to zero.
         note_gen_n = tf.concat([p_gen_n, a_mask_gen_n], axis=1) # concatenate
         
         #print('note_gen_n final shape = ', note_gen_n.get_shape())
@@ -270,8 +270,6 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         note_gen_list.append(note_gen_n_unflat)
     
     # Convert output list to a Tensor
-    #y_out = tf.reshape(tf.stack(y_list, axis=1), [batch_size, num_notes, num_timesteps, 2, 2])
-    #note_gen_out = tf.reshape(tf.stack(note_gen_list, axis=1),  [batch_size, num_notes, num_timesteps, 2])
     y_out = tf.stack(y_list, axis=1)
     note_gen_out = tf.stack(note_gen_list, axis=1)
 
