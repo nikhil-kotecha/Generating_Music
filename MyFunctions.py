@@ -170,10 +170,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     #    - LogP with dimensions batch_size x num_notes x num_timesteps x 3
     #    - note_gen with dimensions batch_size x num_notes x num_timesteps x 1
 
-    # number of outputs is number of note+articulation combinations
-    #    - 0: note is not played
-    #    - 1: note is played and held
-    #    - 2: note is played and articulated
+ 
     """
     
     # batch_size and num_timesteps are variable length
@@ -210,7 +207,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
 
     #Set values for initial LSTM state and sampled note.  Zero notes always played below bottom note
     h_state = state_init
-    note_gen_n = tf.zeros([batch_size*num_timesteps, 2])
+    p_gen_n= tf.zeros([batch_size*num_timesteps, 1])
 
     y_list=[]
     note_gen_list=[]
@@ -219,9 +216,10 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     #Run through notes for note-wise LSTM to obtain P(va(n) | va(<n))
     for n in range(num_notes):    
         #concatenate previously sampled note play-articulate-combo with timewise output
-        p_gen = tf.cast(tf.slice(note_gen_n, [0,0],[-1,1]), tf.float32)
+        #p_gen = tf.cast(tf.slice(note_gen_n, [0,0],[-1,1]), tf.float32)
+        #print('p_gen shape = ', p_gen.get_shape())
         #a_gen = tf.cast(tf.slice(note_gen_n, [0,1],[-1,1]), tf.float32) # only feed back 'play' component, NOT 'articulate'
-        cell_inputs = tf.concat([notewise_in[:,n,:], p_gen], axis=-1)
+        cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(p_gen_n, tf.float32)], axis=-1)
 
         #print('Cell inputs shape = ', cell_inputs.get_shape())
         
@@ -243,6 +241,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         # Sample the 'play' and 'articulate' values  from y_p_n and y_a_n (unscaled) log probabilities, respectively
         p_gen_n = tf.multinomial(logits=y_p_n, num_samples=1) 
         a_gen_n = tf.multinomial(logits=y_a_n, num_samples=1) 
+        #print('p_gen_n shape = ', p_gen_n.get_shape())
       
         """
          Network should never generate a 'no play' with an 'articulate'.  
@@ -255,9 +254,9 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         
         #print('note_gen_n final shape = ', note_gen_n.get_shape())
         
-        # Concatenate y_n back together such that the logp=1/0 is the last dimension
+        # Concatenate y_n back together such that the logp=0/1 is the last dimension
         y_n = tf.stack([y_p_n, y_a_n], axis=2) # now y_n point is 2 x 2 with last dimension being [play, articulate]
-        y_n = tf.transpose(y_n, perm=[0, 2, 1])# now last dimension is [prob = 1, prob = 0]
+        y_n = tf.transpose(y_n, perm=[0, 2, 1])# now last dimension is [prob = 0, prob = 1]
         #dimensions of y_n are: [batch_size*num_timesteps, 2, 2]
         
         # Reshape the 1st dimension back into batch and timesteps dimensions                        

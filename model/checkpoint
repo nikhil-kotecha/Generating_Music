@@ -1,2 +1,2 @@
-model_checkpoint_path: "NoteGen_Fix"
-all_model_checkpoint_paths: "NoteGen_Fix"
+model_checkpoint_path: "Practice"
+all_model_checkpoint_paths: "Practice"
