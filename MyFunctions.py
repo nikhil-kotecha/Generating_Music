@@ -309,7 +309,7 @@ def Loss_Function(Note_State_Batch, y_out):
     cross_entropy = tf.stack([cross_entropy_p, cross_entropy_a], axis=-1)
    
     # calculate the loss function as defined in the paper
-    Loss = tf.reduce_mean(cross_entropy) # negative log-likelihood of batch
+    Loss = tf.reduce_mean(cross_entropy) * 2 # negative log-likelihood of batch (factor of 2 for both play and articulate)
     
     # calculate the log-likelihood of notes at a single time step
     Log_likelihood = -Loss*num_notes

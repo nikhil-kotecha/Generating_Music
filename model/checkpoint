@@ -1,2 +1,2 @@
-model_checkpoint_path: "Practice"
-all_model_checkpoint_paths: "Practice"
+model_checkpoint_path: "Practice_sigmoid"
+all_model_checkpoint_paths: "Practice_sigmoid"
