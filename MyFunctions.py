@@ -153,12 +153,12 @@ def LSTM_TimeWise_Training_Layer(input_data, state_init, output_keep_prob=1.0):
     return output, state_out
 
 
-def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=2):
+def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0):
     """
     Arguments:
         input_data: size = [batch_size x num_notes x num_timesteps x size_input]
-        state_init: List of LSTMTuples([batch_size*num_time_steps x num_units[layer]], [batch_size*num_timesteps x num_units[layer]]) 
-        num_class: number of possible integer values for Note_State_Batch entries
+        state_init: List of LSTMTuples, each like ([batch_size*num_time_steps x num_units[layer]], [batch_size*num_timesteps x num_units[layer]]) (state_init will likely always be zero for the notewise layer)
+        output_keep_prob: float between 0 and 1 specifying dropout layer retention
           
     # LSTM note-wise
     # This section is the 'Model LSTM-Note Axis' block and runs a number of LSTM cells from low note to high note
@@ -167,8 +167,8 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     #  concatenated with a sampled output from the previous note step
     # The input data is 'Hid_State_Final' with dimensions batch_size x num_notes x num_timesteps x num_units
     # The output will be:
-    #    - LogP with dimensions batch_size x num_notes x num_timesteps x 3
-    #    - note_gen with dimensions batch_size x num_notes x num_timesteps x 1
+    #    - y = logits(Probability=1) with dimensions batch_size x num_notes x num_timesteps x 2
+    #    - note_gen with dimensions batch_size x num_notes x num_timesteps x 2
 
  
     """
@@ -187,6 +187,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     notewise_in = tf.reshape(notewise_in, shape=[batch_size*num_timesteps, num_notes, input_size])
     
     # generate LSTM cell list of length specified by initial state
+    # each layer has a dropout mask
     cell_list=[]
     num_states=[]
     for h in range(num_layers):
@@ -201,14 +202,15 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
    
     # For this LSTM cell, can't use tf.nn.dynamic_rnn because samples have to be generated and fed back to for subsequent notes
     # need to feed the generated output for note 'n-1' into the generation of note 'n'
-    # Will use 'for' loop and call the LSTM cell each time
+    # Will use 'for' loop and call the LSTM cell each for each note step
 
    
 
     #Set values for initial LSTM state and sampled note.  Zero notes always played below bottom note
     h_state = state_init
     p_gen_n= tf.zeros([batch_size*num_timesteps, 1])
-
+    a_gen_n= tf.zeros([batch_size*num_timesteps, 1])
+    
     y_list=[]
     note_gen_list=[]
   
@@ -216,9 +218,7 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
     #Run through notes for note-wise LSTM to obtain P(va(n) | va(<n))
     for n in range(num_notes):    
         #concatenate previously sampled note play-articulate-combo with timewise output
-        #p_gen = tf.cast(tf.slice(note_gen_n, [0,0],[-1,1]), tf.float32)
-        #print('p_gen shape = ', p_gen.get_shape())
-        #a_gen = tf.cast(tf.slice(note_gen_n, [0,1],[-1,1]), tf.float32) # only feed back 'play' component, NOT 'articulate'
+        # feed back both 'play' and 'articulate' components (articulate component is the masked version)
         cell_inputs = tf.concat([notewise_in[:,n,:], tf.cast(p_gen_n, tf.float32),  tf.cast(a_gen_n, tf.float32)], axis=-1)
 
         #print('Cell inputs shape = ', cell_inputs.get_shape())
@@ -228,39 +228,30 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
         #print('h_final_out shape = ', h_final_out.get_shape())
         #print('h_state len = ', len(h_state))
         
-        # Fully Connected Layer to generate 4 outputs: [logP(p=0), logP(p=1), logP(a=0), logP(a=1)]
-        y_n = tf.layers.dense(inputs=h_final_out, units=4, activation=None)
-        #print('y_n shape original shape = ', y_n.get_shape())
+        # Fully Connected Layer to generate 2 outputs that correspond to [logit(p=1), logit(a=1)]
+        # keeping it in logit form for convenience of Tensorflow functions (logit=inverse sigmoid = 1:1 mapping with probability)
+        y_n = tf.layers.dense(inputs=h_final_out, units=2, activation=None)
+        #print('y_n shape = ', y_n.get_shape())
         
-        # slice output of full connected layer into play and articulate probabilities   
-        y_p_n = tf.slice(y_n, [0,0], [-1,2]) #[logP(p=0), logP(p=1)]
-        y_a_n = tf.slice(y_n, [0,2], [-1,2]) #[logP(a=0), logP(a=1)]
-        #print('y_p_n shape = ', y_p_n.get_shape())
-        #print('y_a_n shape = ', y_a_n.get_shape())
-       
-        # Sample the 'play' and 'articulate' values  from y_p_n and y_a_n (unscaled) log probabilities, respectively
-        p_gen_n = tf.multinomial(logits=y_p_n, num_samples=1) 
-        a_gen_n = tf.multinomial(logits=y_a_n, num_samples=1) 
-        #print('p_gen_n shape = ', p_gen_n.get_shape())
+        # sample note play/articulation using Probability of event = sigmoid(y_n)
+        note_gen_n = tf.distributions.Bernoulli(logits=y_n).sample()      
+        #print('note_gen_n original shape = ', note_gen_n.get_shape())      
       
         """
-         Network should never generate a 'no play' with an 'articulate'.  
-         This unnecessarily penalizes notes that are (correctly) rested but perceived by the network to require 'articulation'
-         In addition, the Midi-to-Matrix function never generates this condition, so during music generation, feeding this condition into              the next batch creates inputs that the model has never seen.
+        Network should never generate an articulation with a 'no play' note.  
+        The  Midi-to-Matrix function never generates this condition, so during music generation, feeding this condition into                       the next batch creates inputs that the model has never seen.
         """        
-        
-        a_mask_gen_n = tf.multiply(p_gen_n, a_gen_n) # if a given note is not played (=0), automatically set articulate to zero.
-        note_gen_n = tf.concat([p_gen_n, a_mask_gen_n], axis=1) # concatenate
+        # zero out all articulation where the same note at the same time step of the same batch is NOT played
+        p_gen_n = tf.slice(note_gen_n, [0,0], [-1,1])
+        a_gen_n = tf.slice(note_gen_n, [0,1], [-1,1])          
+        a_gen_n = tf.multiply(p_gen_n, a_gen_n) # if a given note is not played (=0), automatically set articulate to zero.
+        note_gen_n = tf.concat([p_gen_n, a_gen_n], axis=1) # concatenate
         
         #print('note_gen_n final shape = ', note_gen_n.get_shape())
         
-        # Concatenate y_n back together such that the logp=0/1 is the last dimension
-        y_n = tf.stack([y_p_n, y_a_n], axis=2) # now y_n point is 2 x 2 with last dimension being [play, articulate]
-        y_n = tf.transpose(y_n, perm=[0, 2, 1])# now last dimension is [prob = 0, prob = 1]
-        #dimensions of y_n are: [batch_size*num_timesteps, 2, 2]
         
         # Reshape the 1st dimension back into batch and timesteps dimensions                        
-        y_n_unflat = tf.reshape(y_n, shape=[batch_size, num_timesteps, 2, 2])
+        y_n_unflat = tf.reshape(y_n, shape=[batch_size, num_timesteps, 2])
         note_gen_n_unflat = tf.reshape(note_gen_n, shape=[batch_size, num_timesteps, 2])
         
         #print('note_gen_n shape = ', note_gen_n.get_shape())
@@ -280,46 +271,47 @@ def LSTM_NoteWise_Layer(input_data, state_init, output_keep_prob=1.0, num_class=
 
 
 
-def Loss_Function(Note_State_Batch, y_in):
+def Loss_Function(Note_State_Batch, y_out):
     """
     Arguments:
         Note State Batch: shape = [batch_size x num_notes x num_timesteps x 2]
-        batch of log probabilities: shape = [batch_size x num_notes x num_timesteps x 2 x 2]
+        batch of logit(prob=1): shape = [batch_size x num_notes x num_timesteps x 2]
         
     # This section is the Loss Function Block
-    # logP out is the 3x play-articulate log probabilities for each note, at every time step, for every batch
-    # Input Note_State_Batch contains the actual class played for each note, at every time step, for every batch
-    # The Loss Function should match up the logP log probabilities at time 't-1' to the ground truth class at time 't'
-    # Remove the following:
-    #    - 1st element of Note_State Batch in 't' dimension.  This is irrelevant as a label, anyways.
-    #    - last element of logP_out in 't' dimension.  There is no corresponding future Note_State_Batch element , anyways
-    # y_out elements will now correspond to the Note_State_Batch elements that it is trying to predict.  
+    # Note_State_Batch contains the actual binary values played and articulated for each note, at every time step, for every batch
+    # Entries in y_out at time step $t$ were generated by entries in Note_State_Batch at time step $t$.  The objective of the model is for 
+    entries in y_out at time step $t$ to predict Note_State_Batch at time step $t+1$.  In order to properly align the tensors for the  
+    loss function calculation, the last time slice of y_out is removed, and the first time slice of Note_State_Batch is removed.
     """   
 
     
     # batch_size and num_timesteps are variable length
-    batch_size = tf.shape(y_in)[0]
-    num_notes = y_in.get_shape()[1].value
-    num_timesteps = tf.shape(y_in)[2]
+    batch_size = tf.shape(y_out)[0]
+    num_notes = y_out.get_shape()[1].value
+    num_timesteps = tf.shape(y_out)[2]
+    
+    print('Note_State_Batch: ', Note_State_Batch)
+    # Line up y_out  with next-time-step note_state input data
+    y_align = tf.slice(y_out, [0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2])
+    Note_State_Batch_align = tf.slice(Note_State_Batch, [0,0,1,0],[batch_size, num_notes, num_timesteps-1, 2])
     
     
-    #assert Note_State_Batch.get_shape()[0].value == logP.get_shape()[0].value
-    #assert Note_State_Batch.get_shape()[1].value == logP.get_shape()[1].value
-    #assert Note_State_Batch.get_shape()[2].value == logP.get_shape()[2].value
-
-
-    # Line up logP with future input data
-    y_align = tf.slice(y_in, [0,0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2, 2])
-    #print('logP : ', logP)
-    print('y_align shape = : ', y_align.get_shape())
-
-    Note_State_Batch_align = tf.cast(tf.slice(Note_State_Batch, [0,0,1, 0],[batch_size, num_notes, num_timesteps-1, 2]), dtype=tf.int64)
-    #print('Note_State_Batch: ', Note_State_Batch)
-    print('Note_State_Batch_align shape = : ', Note_State_Batch_align.get_shape())
-
-
-    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_align,labels=Note_State_Batch_align)
-    Loss = tf.reduce_mean(cross_entropy)
+    
+    #print('Note_State_Batch_align shape = : ', Note_State_Batch_align.get_shape())
+    #print('y_align shape = : ', y_align.get_shape())
+    
+    # calculate log likelihoods
+    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=y_align, labels=Note_State_Batch_align)
+    
+    # if note is not played, mask out loss term for articulation    
+    cross_entropy_p = cross_entropy[:,:,:,0]
+    cross_entropy_a = cross_entropy[:,:,:,1] * Note_State_Batch_align[:,:,:,0] 
+    cross_entropy = tf.stack([cross_entropy_p, cross_entropy_a], axis=-1)
    
+    # calculate the loss function as defined in the paper
+    Loss = tf.reduce_mean(cross_entropy) # negative log-likelihood of batch
     
-    return Loss, cross_entropy
+    # calculate the log-likelihood of notes at a single time step
+    Log_likelihood = -Loss*num_notes
+    
+    return Loss, Log_likelihood

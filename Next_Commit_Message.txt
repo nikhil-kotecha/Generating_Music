@@ -1,6 +1,7 @@
-Note Generation and Articulation Fix
+Note Generation and Loss Function Modification
 
-- removed feed back of note articulation
-- zero out articulation when note isn't played
-- cleaned up note generation part.
-- code has been debugged but model hasn't been trained with these fixes, yet
+- output of final LSTM goes into fully-connected layer which outputs 2 'logits' units
+- sample generated from bernoulli distribution
+- the articulation term being fed back is now the masked version.
+- loss function uses sigmoid_cross_entropy
+- loss function now also outputs log likelihood of single time step.
