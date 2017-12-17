@@ -1,7 +1,5 @@
-Note Generation and Loss Function Modification
+Code Organization
 
-- output of final LSTM goes into fully-connected layer which outputs 2 'logits' units
-- sample generated from bernoulli distribution
-- the articulation term being fed back is now the masked version.
-- loss function uses sigmoid_cross_entropy
-- loss function now also outputs log likelihood of single time step.
+- user setting of list of directories for Midi file loading
+- added periodic validation
+- automated results and midi file directory creation and saving
