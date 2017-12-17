@@ -290,7 +290,7 @@ def Loss_Function(Note_State_Batch, y_out):
     num_notes = y_out.get_shape()[1].value
     num_timesteps = tf.shape(y_out)[2]
     
-    print('Note_State_Batch: ', Note_State_Batch)
+   
     # Line up y_out  with next-time-step note_state input data
     y_align = tf.slice(y_out, [0,0,0,0],[batch_size, num_notes, num_timesteps-1, 2])
     Note_State_Batch_align = tf.slice(Note_State_Batch, [0,0,1,0],[batch_size, num_notes, num_timesteps-1, 2])
@@ -315,3 +315,7 @@ def Loss_Function(Note_State_Batch, y_out):
     Log_likelihood = -Loss*num_notes
     
     return Loss, Log_likelihood
+
+
+
+
