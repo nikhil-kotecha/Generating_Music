@@ -4,6 +4,7 @@ from tensorflow.python.ops import math_ops
 from tensorflow.contrib.rnn import BasicLSTMCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import LSTMStateTuple
+import os
 
 
 
