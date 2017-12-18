@@ -1,9 +1,11 @@
 # Generating_Music
 
 The Main.ipynb file is divided into 4 cells to individually run:
+
 	1): import Python libraries
 		INSTRUCTIONS:
 			-run cell to import all the necessary Python libraries (REQUIRED)
+
 	2): import .MIDI files
 		INSTRUCTIONS:
 			- run cell to read in the current working directory and specified MIDI files (REQUIRED)
@@ -11,12 +13,14 @@ The Main.ipynb file is divided into 4 cells to individually run:
 			- specify list of folders to extract music from
 			- specify max # time steps required to retain each MIDI file
 			- specify # pieces to set aside for independent validation during training
+
 	3): Build model graph
 		INSTRUCTIONS:
 			- run cell to build the Input Kernel, timewise LSTM, notewise LSTM, loss, and optimizer graphs (REQUIRED)
 		USER INPUT:
 			- specify hidden sizes for timewise and notewise LSTM stages (a list for each)
 			  num_t_units and num_n_units
+
 	4): Train model
 		DESCRIPTION:
 			- runs a specified number of batches for training
