@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/ecbm4040/Music_Project/Generating_Music/Output/Long_Train/Long_Train"
+all_model_checkpoint_paths: "/home/ecbm4040/Music_Project/Generating_Music/Output/Long_Train/Long_Train"
