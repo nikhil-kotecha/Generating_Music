@@ -1,3 +1,6 @@
+####sourced from: https://github.com/dshieble/Music_RBM
+
+
 #### Helper functions. 
 
 #This function lets us easily sample from a vector of probabilities
