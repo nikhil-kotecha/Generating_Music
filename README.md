@@ -43,8 +43,12 @@ The Main.ipynb file is divided into 4 cells to individually run:
 			- specify keep_prob = 1 - drop out rate
 
 
-All models, loss graphs, and generated midi files are restored/saved to/from a folder i.e. Generating_Music/Output/Save_Model_Name
+All models, loss graphs, and generated midi files are automatically saved to a folder i.e. Generating_Music/Output/Save_Model_Name
 		    where "Generating_Music" is the working directory and the subdirectory "Output" is reserved for all the generated files.
+			models are restored from the same corresponding directories
+
+Latest .MIDI files are under Ouptput/Piano_Midi2
+
 		
 
 	
