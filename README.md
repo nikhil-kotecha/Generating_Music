@@ -1,5 +1,7 @@
 # Generating_Music
 
+Detailed writeup: "Final Writeup - Generating Music using an LSTM Network.pdf"
+
 The Main.ipynb file is divided into 4 cells to individually run:
 
 	1): import Python libraries
